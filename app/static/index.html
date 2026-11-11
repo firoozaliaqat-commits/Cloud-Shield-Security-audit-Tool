@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudShield | Huawei KooLab</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<div class="shell">
+  <aside class="sidebar"><div class="logo"><span class="logo-icon">⬡</span><div><strong>CloudShield</strong><small>HUAWEI KOOLAB · v1.1</small></div></div>
+    <nav><a href="#overview" class="current">◈ &nbsp; Overview</a><a href="#testing">◉ &nbsp; Load Testing</a><a href="/target/store" target="_blank" rel="noopener">▣ &nbsp; Demo Store ↗</a><a href="#bans">⊘ &nbsp; IP Enforcement</a><a href="#events">≡ &nbsp; Security Events</a><a href="#advanced">◇ &nbsp; Engines</a></nav>
+    <div class="side-note"><b>CLASSROOM ONLY</b><p>All load jobs target the built-in demonstration app, not Internet hosts.</p></div>
+  </aside>
+  <main class="main"><header><div><div class="eyebrow">CLOUD DEFENSE LABORATORY</div><h1>Security Operations Center</h1><p class="lead">Detect suspicious behavior, enforce temporary bans, and run controlled cloud traffic exercises.</p></div><div class="top-right"><span class="live-dot"></span><span id="statusLine">Checking services…</span></div></header>
+  <div id="flash" class="flash hidden" role="alert"></div>
+  <section id="overview" class="cards">
+    <article class="stat"><div class="stat-label">Active IP bans</div><div class="stat-value" id="sBans">—</div><small>Automatically expiring rules</small></article>
+    <article class="stat"><div class="stat-label">Events in last hour</div><div class="stat-value" id="sEvents">—</div><small>Lab event audit trail</small></article>
+    <article class="stat"><div class="stat-label">Load generation</div><div class="stat-value smaller" id="sRunning">—</div><small>One bounded job at a time</small></article>
+    <article class="stat"><div class="stat-label">Default auto-ban</div><div class="stat-value" id="sMinutes">—</div><small>Minutes until automatic removal</small></article>
+  </section>
+  <div class="two-col">
+  <section id="testing" class="panel"><div class="section-head"><div><div class="eyebrow">CONTROLLED TESTS</div><h2>Traffic Simulation Center</h2></div><span class="tag">k6 engine</span></div>
+    <p><a class="link-btn" href="/target/store" target="_blank" rel="noopener">🛒 Open protected Demo Store ↗</a></p><div class="profile-grid"><label><input type="radio" name="profile" value="normal" checked><span><b>Normal traffic</b><small>Health, API, valid login</small></span></label><label><input type="radio" name="profile" value="store"><span><b>Demo Store journey</b><small>Browse, search, cart, checkout</small></span></label><label><input type="radio" name="profile" value="spike"><span><b>Traffic spike</b><small>High request rate</small></span></label><label><input type="radio" name="profile" value="auth"><span><b>Failed logins</b><small>Trigger real auto-ban</small></span></label><label><input type="radio" name="profile" value="transfer"><span><b>File download</b><small>4 MiB each request</small></span></label><label><input type="radio" name="profile" value="waf"><span><b>WAF signature</b><small>Safe SQLi-shaped probe</small></span></label><label id="vpcOption"><input type="radio" name="profile" value="vpc_get"><span><b>Private VPC HTTP GET</b><small>Instructor-configured second ECS</small></span></label></div>
+    <div class="controls"><label>Virtual users <input type="number" id="vus" value="5" min="1" max="40"></label><label>Duration (seconds) <input type="number" id="seconds" value="30" min="5" max="180"></label></div>
+    <p class="muted">Default traffic stays inside the deployment. A separate VPC GET profile is available only when an instructor configures a private RFC1918 target in <code>.env</code>.</p>
+    <div class="actions"><button class="primary" id="start">▶ &nbsp; Start k6 Test</button><button class="danger-outline" id="stop">■ &nbsp; Emergency Stop</button></div>
+    <div class="result" id="runResult">No test running. Select a profile and start a bounded exercise.</div>
+  </section>
+  <section id="bans" class="panel"><div class="section-head"><div><div class="eyebrow">AUTOMATED DEFENSE</div><h2>Temporary IP Bans</h2></div><span class="tag teal">TTL enforcement</span></div>
+    <div class="controls"><label>Auto-ban duration (min)<select id="banMinutes"><option value="1">1 (demo)</option><option value="5">5</option><option value="60">60 (1 hour)</option><option value="120">120 (2 hours)</option><option value="240">240 (4 hours)</option><option value="1440">1440 (24 hours)</option></select></label><button id="saveSettings" class="secondary">Save policy</button></div>
+    <p class="muted">Five incorrect demonstration logins within 90 seconds trigger a real, time-limited block for that source IP.</p>
+    <div class="ban-form"><input id="banIP" placeholder="Private IP, e.g. 172.20.0.10"><select id="manualMinutes"><option value="1">1 min</option><option value="60">1 hour</option><option value="240" selected>4 hours</option></select><button id="banNow" class="secondary">Block IP</button></div>
+    <div class="table-scroll"><table><thead><tr><th>Source IP</th><th>Rule</th><th>Remaining</th><th></th></tr></thead><tbody id="bansList"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div>
+    <small class="muted">CrowdSec decisions are enforced separately by the gateway bouncer and managed with <code>cscli</code>.</small>
+  </section></div>
+  <div class="two-col next-row">
+  <section id="events" class="panel"><div class="section-head"><div><div class="eyebrow">EVIDENCE & REVIEW</div><h2>Security Events</h2></div><button class="secondary small" id="refresh">Refresh</button></div>
+    <div class="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Event</th><th>Source IP</th></tr></thead><tbody id="eventsList"><tr><td colspan="3">No events yet.</td></tr></tbody></table></div>
+  </section>
+  <section id="advanced" class="panel"><div class="section-head"><div><div class="eyebrow">DEFENSE IN DEPTH</div><h2>Security Engines</h2></div></div>
+    <div class="engine"><span>🛡</span><div><b>Coraza WAF + OWASP CRS</b><small>Blocks web application signatures before the backend</small></div><em>Core</em></div>
+    <div class="engine"><span>◈</span><div><b>CrowdSec</b><small>Real detection engine + API-based decision bouncer</small></div><em>Security profile</em></div>
+    <div class="engine"><span>◉</span><div><b>Prometheus + Grafana</b><small>Request rate, statuses, blocked requests, latency</small></div><em>Monitoring profile</em></div>
+    <div class="engine"><span>⬡</span><div><b>ClamAV</b><small>Upload signature scanning; enable antivirus profile</small></div><em>Optional</em></div>
+    <div class="engine"><span>◎</span><div><b>Suricata</b><small>Real offline PCAP inspection practical</small></div><em>Optional</em></div>
+    <div class="actions" style="margin-top:18px"><a class="link-btn" href="http://localhost:3000/d/cloudshield/cloudshield-koolab-security-load" target="_blank" rel="noopener">Open Grafana ↗</a><a class="link-btn" href="/metrics" target="_blank">Prometheus metrics ↗</a></div>
+    <h3>Suricata alerts</h3><div class="result" id="idsResult">Run the PCAP practical to populate IDS alerts.</div>
+    <h3>Antivirus upload exercise</h3><div class="controls"><input type="file" id="sampleFile"><button class="secondary" id="scan">Scan file</button></div><div class="muted" id="scanResult">ClamAV must be enabled before scanning.</div>
+  </section></div>
+  <footer>CloudShield KooLab · Designed for authorized, isolated Huawei ECS classroom exercises · Never expose the unauthenticated control panel to the public Internet.</footer>
+  </main>
+</div>
+<script src="/static/app.js"></script></body></html>

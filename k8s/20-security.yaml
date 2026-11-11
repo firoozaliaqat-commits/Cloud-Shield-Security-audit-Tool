@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crowdsec-acquis
+  namespace: cloudshield
+data:
+  acquis.yaml: |
+    filenames:
+      - /var/log/cloudshield/logs/nginx-access.log
+    labels:
+      type: nginx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crowdsec
+  namespace: cloudshield
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: crowdsec}
+  template:
+    metadata:
+      labels: {app: crowdsec}
+    spec:
+      securityContext:
+        fsGroup: 10001
+      initContainers:
+        - name: wait-for-access-log
+          image: busybox:1.36
+          command: ['sh', '-c', 'until test -f /logs/logs/nginx-access.log; do sleep 1; done']
+          volumeMounts:
+            - {name: data, mountPath: /logs, readOnly: true}
+      containers:
+        - name: crowdsec
+          image: crowdsecurity/crowdsec:latest
+          env:
+            - {name: COLLECTIONS, value: crowdsecurity/nginx}
+            - name: BOUNCER_KEY_cloudshield
+              valueFrom:
+                secretKeyRef: {name: cloudshield-key, key: key}
+          ports: [{containerPort: 8080}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 750m, memory: 700Mi}
+          volumeMounts:
+            - {name: acquis, mountPath: /etc/crowdsec/acquis.yaml, subPath: acquis.yaml}
+            - {name: data, mountPath: /var/log/cloudshield, readOnly: true}
+            - {name: crowdsec-store, mountPath: /var/lib/crowdsec/data}
+      volumes:
+        - name: acquis
+          configMap: {name: crowdsec-acquis}
+        - name: data
+          persistentVolumeClaim: {claimName: lab-data}
+        - name: crowdsec-store
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crowdsec
+  namespace: cloudshield
+spec:
+  selector: {app: crowdsec}
+  ports: [{port: 8080, targetPort: 8080}]

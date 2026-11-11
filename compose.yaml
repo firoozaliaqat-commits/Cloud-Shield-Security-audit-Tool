@@ -1,0 +1,145 @@
+name: cloudshield-koolab
+services:
+  labapp:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: cloudshield-lab:1.0.0
+    restart: unless-stopped
+    environment:
+      LAB_DATA_DIR: /data
+      LAB_TARGET_URL: http://waf:8080
+      VPC_TARGET_URL: ${VPC_TARGET_URL:-}
+      K6_PATH: /usr/local/bin/k6
+      K6_SCRIPTS: /app/k6
+      MAX_VUS: ${MAX_VUS:-40}
+      MAX_SECONDS: ${MAX_SECONDS:-180}
+      CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY:-}
+      CROWDSEC_LAPI_URL: http://crowdsec:8080
+      CLAMAV_HOST: clamav
+    volumes:
+      - lab_data:/data
+    networks: [labnet]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 160
+    mem_limit: 1400m
+    cpus: 1.5
+  waf:
+    image: ghcr.io/coreruleset/coraza-crs:4.25-caddy-alpine-lts
+    restart: unless-stopped
+    depends_on:
+      labapp:
+        condition: service_healthy
+    environment:
+      BACKEND: labapp:8000
+      PORT: "8080"
+      CORAZA_RULE_ENGINE: On
+      BLOCKING_PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      CORAZA_AUDIT_ENGINE: RelevantOnly
+    ports:
+      - "${LAB_BIND_IP:-127.0.0.1}:${LAB_PORT:-8080}:8080"
+    networks: [labnet]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 650m
+    cpus: 1.0
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    profiles: [security]
+    depends_on:
+      labapp:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: crowdsecurity/nginx
+      BOUNCER_KEY_cloudshield: ${CROWDSEC_BOUNCER_KEY:-}
+      GID: "10001"
+    volumes:
+      - crowdsec_data:/var/lib/crowdsec/data
+      - crowdsec_config:/etc/crowdsec
+      - lab_data:/var/log/cloudshield:ro
+      - ./config/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+    networks: [labnet]
+    mem_limit: 700m
+    cpus: 0.75
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=24h", "--web.enable-remote-write-receiver"]
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [labnet]
+    ports: ["127.0.0.1:9090:9090"]
+    mem_limit: 650m
+    cpus: 0.5
+  grafana:
+    image: grafana/grafana:11.6.2
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-replace-me-for-local-lab}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/cloudshield.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+    networks: [labnet]
+    mem_limit: 550m
+    cpus: 0.5
+  clamav:
+    image: clamav/clamav:stable
+    profiles: [antivirus]
+    restart: unless-stopped
+    volumes: [clamav_db:/var/lib/clamav]
+    networks: [labnet]
+    mem_limit: 4g
+    cpus: 1.0
+  iperf3-server:
+    build:
+      context: .
+      dockerfile: config/iperf3.Dockerfile
+    image: cloudshield-iperf3:1.0.0
+    profiles: [network]
+    command: ["-s"]
+    networks: [labnet]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
+  suricata:
+    image: jasonish/suricata:8.0
+    profiles: [ids]
+    entrypoint: ["suricata"]
+    command: ["-r", "/pcaps/lab-demo.pcap", "-S", "/rules/lab.rules", "-l", "/data/suricata"]
+    volumes:
+      - lab_data:/data
+      - ./config/suricata/lab.rules:/rules/lab.rules:ro
+      - ./config/suricata/lab-demo.pcap:/pcaps/lab-demo.pcap:ro
+    networks: [labnet]
+    restart: "no"
+    mem_limit: 800m
+networks:
+  labnet:
+    driver: bridge
+volumes:
+  lab_data:
+  crowdsec_data:
+  crowdsec_config:
+  prometheus_data:
+  grafana_data:
+  clamav_db:
